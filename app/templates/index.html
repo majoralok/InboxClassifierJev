@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jev Inbox</title>
+    <meta name="description" content="Private Gmail categorization powered by TypeSafe Jev">
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+  </head>
+  <body>
+    {% if not email %}
+      <main class="landing-shell">
+        <nav class="landing-nav">
+          <div class="brand"><span class="brand-mark">J</span> Jev Inbox</div>
+          <span class="privacy-pill">Private by design</span>
+        </nav>
+        <section class="hero">
+          <div>
+            <p class="eyebrow">INBOX, WITH INTENT</p>
+            <h1>Let every email<br><em>find its place.</em></h1>
+            <p class="hero-copy">
+              Jev reads the purpose of each new message and applies useful Gmail labels.
+              Uncertain decisions wait for your review.
+            </p>
+            {% if oauth_error %}
+              <div class="alert error">{{ oauth_error }}</div>
+            {% endif %}
+            {% if configuration_errors %}
+              <div class="setup-card">
+                <strong>Configuration needed</strong>
+                <p>Copy <code>.env.example</code> to <code>.env</code> and set these values:</p>
+                <code class="missing-list">{{ configuration_errors | join('\n') }}</code>
+              </div>
+            {% else %}
+              <a class="primary-button connect-button" href="/api/auth/google/start">
+                Connect Gmail <span aria-hidden="true">→</span>
+              </a>
+            {% endif %}
+            <p class="scope-note">Uses Gmail read and label access. It never sends or deletes mail.</p>
+          </div>
+          <div class="preview-stack" aria-hidden="true">
+            <div class="mail-card mail-card-back">
+              <span class="sender-dot orange"></span>
+              <div><b>Studio Letter</b><p>Issue 48 — systems that last</p></div>
+              <span class="tag amber">Newsletter</span>
+            </div>
+            <div class="mail-card mail-card-middle">
+              <span class="sender-dot plum"></span>
+              <div><b>Accounts</b><p>Your September invoice is ready</p></div>
+              <span class="tag plum">Finance</span>
+            </div>
+            <div class="mail-card mail-card-front">
+              <span class="sender-dot green"></span>
+              <div><b>Mira Chen</b><p>Can you approve the final draft?</p></div>
+              <span class="tag green">Action Required</span>
+              <div class="confidence"><span style="width:91%"></span> 91% confidence</div>
+            </div>
+          </div>
+        </section>
+        <footer class="landing-footer">
+          <span>Powered by TypeSafe Jev</span>
+          <span>Credentials stay server-side · OAuth tokens encrypted at rest</span>
+        </footer>
+      </main>
+    {% else %}
+      <main class="app-shell">
+        <aside class="sidebar">
+          <div class="brand"><span class="brand-mark">J</span> Jev Inbox</div>
+          <nav class="side-nav" aria-label="Dashboard filters">
+            <button class="active" data-filter="all"><span>⌁</span> All activity <b>{{ stats.total }}</b></button>
+            <button data-filter="review"><span>◇</span> Needs review <b>{{ stats.review }}</b></button>
+            <button data-filter="error"><span>!</span> Errors <b>{{ stats.errors }}</b></button>
+          </nav>
+          <div class="category-list">
+            <p>GMAIL LABELS</p>
+            {% for key, category in categories.items() %}
+              <div><i class="label-dot dot-{{ key }}"></i>{{ category.name }}</div>
+            {% endfor %}
+          </div>
+          <div class="account-card">
+            <span class="avatar">{{ email[0] | upper }}</span>
+            <div><strong>{{ email.split('@')[0] }}</strong><small>{{ email }}</small></div>
+            <button id="disconnect" title="Disconnect Gmail">↗</button>
+          </div>
+        </aside>
+
+        <section class="dashboard-main">
+          <header class="dashboard-header">
+            <div><p class="eyebrow">YOUR WORKSPACE</p><h1>Inbox overview</h1></div>
+            <button class="primary-button" id="classify-now">Classify now</button>
+          </header>
+          <div class="alert" id="dashboard-message" hidden></div>
+          <section class="stats-grid">
+            <article><span>Processed</span><strong>{{ stats.total }}</strong><small>within the current history</small></article>
+            <article><span>Automatically labeled</span><strong>{{ stats.labeled }}</strong><small>confidence ≥ {{ (threshold * 100) | round | int }}%</small></article>
+            <article class="review-stat"><span>Waiting for you</span><strong>{{ stats.review }}</strong><small>uncertain decisions</small></article>
+            <article>
+              <span>Latest run</span>
+              <strong class="job-time" data-date="{{ last_job.finished_at if last_job else '' }}">{{ last_job.finished_at if last_job and last_job.finished_at else 'Not yet' }}</strong>
+              <small>{{ last_job.status if last_job and last_job.status else 'Run your first batch' }}</small>
+            </article>
+          </section>
+
+          <section class="learning-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">DECISION LAB</p>
+                <h2>Try the typed Jev workflow</h2>
+                <p>One request asks a Choice, a Noul, and a Score. Python then chooses the route.</p>
+              </div>
+              <span class="model-badge">no Gmail changes</span>
+            </div>
+            <form class="learning-form" id="learning-form">
+              <label>
+                Sender
+                <input id="learning-sender" name="sender" type="text" maxlength="320" value="manager@example.com" required>
+              </label>
+              <label>
+                Subject
+                <input id="learning-subject" name="subject" type="text" maxlength="300" value="Please approve the launch today" required>
+              </label>
+              <label class="learning-message">
+                Message
+                <textarea id="learning-message" name="message" maxlength="12000" rows="4" required>Please review the final launch plan and approve it before 4 PM today.</textarea>
+              </label>
+              <div class="learning-actions">
+                <button class="primary-button" id="run-learning-sample" type="submit">Run typed decision</button>
+                <small>This calls Jev but does not read, label, or store email.</small>
+              </div>
+            </form>
+            <div class="learning-result" id="learning-result" hidden aria-live="polite">
+              <div class="judgment-card">
+                <span>Choice</span>
+                <strong id="learning-category">—</strong>
+                <small id="learning-confidence"></small>
+              </div>
+              <div class="judgment-card">
+                <span>Noul</span>
+                <strong id="learning-action">—</strong>
+                <small>probability the recipient needs to act</small>
+              </div>
+              <div class="judgment-card">
+                <span>Score</span>
+                <strong id="learning-urgency">—</strong>
+                <small>routine 0 → urgent 2</small>
+              </div>
+              <div class="judgment-card policy-card">
+                <span>Python policy</span>
+                <strong id="learning-route">—</strong>
+                <small id="learning-reason"></small>
+              </div>
+              <div class="probability-list" id="learning-probabilities"></div>
+            </div>
+          </section>
+
+          <section class="activity-panel">
+            <div class="panel-heading">
+              <div><h2 id="panel-title">Recent decisions</h2><p>Jev’s decisions and the labels applied in Gmail</p></div>
+              <span class="model-badge">jev-latest</span>
+            </div>
+            <div class="empty-state" id="empty-state" {% if records %}hidden{% endif %}>
+              <span>✦</span><h3>Nothing here yet</h3><p>Classify a batch to start organizing your inbox.</p>
+            </div>
+            <div class="decision-list" id="decision-list">
+              {% for record in records %}
+                {% set chosen = record.applied_category or record.suggested_category %}
+                <article class="decision-row" data-status="{{ record.status }}">
+                  <div class="message-icon">{{ (record.from_address[0] if record.from_address else '@') | upper }}</div>
+                  <div class="message-copy">
+                    <div class="message-meta">
+                      <strong>{{ record.from_address or 'Unknown sender' }}</strong>
+                      <time data-date="{{ record.received_at }}">{{ record.received_at }}</time>
+                    </div>
+                    <h3>{{ record.subject }}</h3>
+                    <p>{{ record.snippet or 'No preview available' }}</p>
+                    {% if record.error %}<small class="error-text">{{ record.error }}</small>{% endif %}
+                  </div>
+                  <div class="decision-result">
+                    {% if chosen %}<span class="category-chip chip-{{ chosen }}"><i></i>{{ categories[chosen].name }}</span>{% endif %}
+                    {% if record.confidence is not none %}<small>{{ (record.confidence * 100) | round | int }}% category confidence</small>{% endif %}
+                    {% if record.action_probability is not none %}<small>{{ (record.action_probability * 100) | round | int }}% action likelihood · urgency {{ '%.1f' | format(record.urgency_score) }}/2</small>{% endif %}
+                    {% if record.status == 'review' %}
+                      <div class="review-controls">
+                        <select id="category-{{ record.id }}" aria-label="Choose category">
+                          {% for key, category in categories.items() %}
+                            <option value="{{ key }}" {% if key == (record.suggested_category or 'other') %}selected{% endif %}>{{ category.name }}</option>
+                          {% endfor %}
+                        </select>
+                        <button class="apply-review" data-id="{{ record.id }}">Apply</button>
+                      </div>
+                    {% endif %}
+                    <a href="https://mail.google.com/mail/u/0/#inbox/{{ record.thread_id }}" target="_blank" rel="noreferrer">Open in Gmail ↗</a>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          </section>
+        </section>
+      </main>
+      <script src="{{ url_for('static', path='/app.js') }}" defer></script>
+    {% endif %}
+  </body>
+</html>

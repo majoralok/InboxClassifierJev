@@ -1,0 +1,16 @@
+services:
+  inbox-classifier:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      ENVIRONMENT: production
+      DATABASE_PATH: /app/data/inbox-classifier.db
+    ports:
+      - "3000:3000"
+    volumes:
+      - inbox-data:/app/data
+
+volumes:
+  inbox-data:
